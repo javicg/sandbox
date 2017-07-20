@@ -14,7 +14,7 @@ class Umpire extends PersistentActor {
       self ! ResumeGame
 
     case event: GameScoreEvent =>
-      state = state.updated(event)
+      updateState(event)
   }
 
   override def receiveCommand: Receive = {
@@ -25,23 +25,26 @@ class Umpire extends PersistentActor {
       }
 
     case ResumeGame =>
-      askOpponentToPlay(state.lastPlayer)
+      serve(state.nextServing)
   }
 
-  private def askOpponentToPlay(player: Player) = {
-    val opponent = player.opponent
-    state.getRef(opponent) ! Ball
-    context.become(waitingForPlayer(opponent))
+  private def serve(player: Player) = {
+    rally(player, player)
   }
 
-  private def waitingForPlayer(player: Player): Receive = {
+  private def rally(player: Player, serving: Player) = {
+    state.getRef(player) ! Ball
+    context.become(waitingForPlayer(player, serving))
+  }
+
+  private def waitingForPlayer(player: Player, serving: Player): Receive = {
     case BallOverNet =>
-      askOpponentToPlay(player)
+      rally(player.opponent, serving)
 
     case BallLost =>
-      persist(GameScoreEvent(player.opponent)) { event =>
-        state = state.updated(event)
-        askOpponentToPlay(player)
+      persist(GameScoreEvent(player.opponent, serving)) { event =>
+        updateState(event)
+        serve(serving.opponent)
       }
   }
 
