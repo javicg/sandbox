@@ -1,6 +1,7 @@
 package com.github.javicg.tennis
 
 import akka.actor.ActorRef
+import com.github.javicg.tennis.Umpire.PlayerScored
 
 // Model
 sealed trait Player {
@@ -19,19 +20,8 @@ case object Unknown extends Player {
   val opponent = Unknown
 }
 
-// Commands
-case class StartGame(name1: String, name2: String)
-case object Ball
-case object BallOverNet
-case object BallLost
-case object ResumeGame
-
-// Events
-case class NewGameEvent(name1: String, name2: String)
-case class GameScoreEvent(player: Player, serving: Player)
-
 // State
-case class State(score: Map[Player, Int] = Map.empty,
+case class State(scores: Map[Player, Int] = Map.empty,
                  playerRefs: Map[Player, ActorRef] = Map.empty,
                  nextServing: Player = Unknown) {
 
@@ -48,9 +38,9 @@ case class State(score: Map[Player, Int] = Map.empty,
  * - players play one after another (alternating)
  * - Points are just summed, no games/sets
  */
-  def updated(event: GameScoreEvent): State = {
+  def +(event: PlayerScored): State = {
     copy(
-      score + (event.player -> (score.getOrElse(event.player, 0) + 1)),
+      scores + (event.player -> (scores.getOrElse(event.player, 0) + 1)),
       playerRefs,
       event.serving.opponent
     )
