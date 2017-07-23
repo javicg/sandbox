@@ -16,20 +16,16 @@ case object Player2 extends Player {
   val opponent = Player1
 }
 
-case object Unknown extends Player {
-  val opponent = Unknown
-}
-
 // State
 case class State(scores: Map[Player, Int] = Map.empty,
                  playerRefs: Map[Player, ActorRef] = Map.empty,
-                 nextServing: Player = Unknown) {
+                 nextServing: Player = Player1,
+                 isFinished: Boolean = false) {
 
   def init(ref1: ActorRef, ref2: ActorRef): State = {
     copy(
-      Map.empty,
-      Map(Player1 -> ref1, Player2 -> ref2),
-      Player1
+      scores = Map.empty,
+      playerRefs = Map(Player1 -> ref1, Player2 -> ref2)
     )
   }
 
@@ -40,11 +36,18 @@ case class State(scores: Map[Player, Int] = Map.empty,
  */
   def +(event: PlayerScored): State = {
     copy(
-      scores + (event.player -> (scores.getOrElse(event.player, 0) + 1)),
-      playerRefs,
-      event.serving.opponent
+      scores = scores + (event.player -> (scores.getOrElse(event.player, 0) + 1)),
+      nextServing = event.serving.opponent
     )
   }
+
+  def end(): State = {
+    copy(
+      isFinished = true
+    )
+  }
+
+  def inProgress: Boolean = playerRefs.nonEmpty
 
   def getRef(player: Player): ActorRef = playerRefs(player)
 }

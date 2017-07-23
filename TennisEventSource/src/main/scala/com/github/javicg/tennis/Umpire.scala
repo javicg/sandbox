@@ -9,30 +9,46 @@ class Umpire extends PersistentActor with ActorLogging {
 
   private var state: State = State()
 
-  override def receiveRecover: Receive = {
-    case event: GameStarted =>
-      updateState(event)
-      self ! ResumeGame
-
-    case event: PlayerScored =>
-      updateState(event)
-  }
-
   override def receiveCommand: Receive = {
     case StartGame(name1, name2) =>
-      persist(GameStarted(name1, name2)) { event =>
-        log.info(s"Game started! ($name1 vs $name2)")
-        updateState(event)
-        self ! ResumeGame
+      if (state.isFinished) {
+        log.warning("Game can't be started. It's finished!")
+      } else if (state.inProgress) {
+        log.warning("Game can't be started. It's already in progress! Resuming game instead...")
+        resumeGame()
+      } else {
+        persist(GameStarted(name1, name2)) { event =>
+          log.info(s"Game started! ($name1 vs $name2)")
+          updateState(event)
+          resumeGame()
+        }
       }
 
     case ResumeGame =>
-      serve(state.nextServing)
+      if (state.isFinished) {
+        log.warning("Game can't be resumed. It's finished!")
+      } else {
+        serve(state.nextServing)
+      }
 
     case EndGame =>
-      log.info("Game finished!")
-      log.info(s"Player 1 [${state.scores(Player1)}] - Player 2[${state.scores(Player2)}]")
+      persist(GameEnded) { _ =>
+        endGame()
+      }
+
+    case FinishMatch =>
       context.system.terminate()
+  }
+
+  override def receiveRecover: Receive = {
+    case event: GameStarted =>
+      updateState(event)
+
+    case event: PlayerScored =>
+      updateState(event)
+
+    case GameEnded =>
+      endGame()
   }
 
   private def serve(player: Player) = {
@@ -52,13 +68,17 @@ class Umpire extends PersistentActor with ActorLogging {
       persist(PlayerScored(player.opponent, serving)) { event =>
         log.info(s"Point for ${player.opponent}")
         updateState(event)
-        self ! ResumeGame
         unstashAll()
+        resumeGame()
         context.become(receiveCommand)
       }
 
     case EndGame =>
       stash()
+  }
+
+  private def resumeGame() = {
+    self ! ResumeGame
   }
 
   private def updateState(event: GameStarted) = {
@@ -69,6 +89,13 @@ class Umpire extends PersistentActor with ActorLogging {
 
   private def updateState(event: PlayerScored) = {
     state += event
+  }
+
+  private def endGame(): Unit = {
+    log.info("Game finished!")
+    log.info(s"Player 1 [${state.scores(Player1)}] - Player 2[${state.scores(Player2)}]")
+    state = state.end()
+    self ! FinishMatch
   }
 
 }
@@ -84,6 +111,7 @@ object Umpire {
   case object BallOverNet
   case object BallLost
   case object ResumeGame
+  case object FinishMatch
 
   // Events
   sealed trait Event
