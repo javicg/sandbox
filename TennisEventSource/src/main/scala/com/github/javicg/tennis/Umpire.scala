@@ -3,17 +3,18 @@ package com.github.javicg.tennis
 import akka.actor.{ActorLogging, Props}
 import akka.persistence.PersistentActor
 import com.github.javicg.tennis.Umpire._
+import com.github.javicg.tennis.model._
 
 class Umpire extends PersistentActor with ActorLogging {
   override val persistenceId: String = "tennis-umpire"
 
-  private var state: State = State()
+  private var _match = Match()
 
   override def receiveCommand: Receive = {
     case StartGame(name1, name2) =>
-      if (state.isFinished) {
+      if (_match.isFinished) {
         log.warning("Game can't be started. It's finished!")
-      } else if (state.inProgress) {
+      } else if (_match.inProgress) {
         log.warning("Game can't be started. It's already in progress! Resuming game instead...")
         resumeGame()
       } else {
@@ -25,10 +26,10 @@ class Umpire extends PersistentActor with ActorLogging {
       }
 
     case ResumeGame =>
-      if (state.isFinished) {
+      if (_match.isFinished) {
         log.warning("Game can't be resumed. It's finished!")
       } else {
-        serve(state.nextServing)
+        serve(_match.nextServe)
       }
 
     case EndGame =>
@@ -56,7 +57,7 @@ class Umpire extends PersistentActor with ActorLogging {
   }
 
   private def rally(player: Player, serving: Player) = {
-    state.getRef(player) ! Ball
+    _match.getRef(player) ! Ball
     context.become(waitingForPlayer(player, serving))
   }
 
@@ -82,19 +83,19 @@ class Umpire extends PersistentActor with ActorLogging {
   }
 
   private def updateState(event: GameStarted) = {
-    state = state.init(
+    _match = _match.init(
       context.actorOf(Props(classOf[PlayerActor], event.name1), "player1"),
       context.actorOf(Props(classOf[PlayerActor], event.name2), "player2"))
   }
 
   private def updateState(event: PlayerScored) = {
-    state += event
+    _match += event
   }
 
   private def endGame(): Unit = {
     log.info("Game finished!")
-    log.info(s"Player 1 [${state.scores(Player1)}] - Player 2[${state.scores(Player2)}]")
-    state = state.end()
+    log.info(s"Player 1 [${_match.scores(Player1)}] - Player 2[${_match.scores(Player2)}]")
+    _match = _match.end()
     self ! FinishMatch
   }
 
