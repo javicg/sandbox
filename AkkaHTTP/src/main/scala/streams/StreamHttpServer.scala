@@ -1,4 +1,5 @@
-import Domain.Event
+package streams
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
@@ -6,10 +7,11 @@ import akka.http.scaladsl.server.Directives._
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
+import streams.Domain.Event
 
 import scala.util.Random
 
-object HttpServer extends App with JsonSupport {
+object StreamHttpServer extends App with JsonSupport {
   implicit val system = ActorSystem("HttpServer")
   implicit val materializer = ActorMaterializer()
 
